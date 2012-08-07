@@ -84,6 +84,7 @@
                 php_error_docref(NULL TSRMLS_CC, E_NOTICE, "There were errors while parsing the configuration file '%s'", Z_STRVAL_PP(_val)); \
                 break; \
             } \
+            _php_tidy_apply_runtime_config(_doc TSRMLS_CC); \
         } \
     }
 
@@ -167,7 +168,8 @@ if (php_check_open_basedir(filename TSRMLS_CC)) { \
 		if (tidyLoadConfig(_doc, TG(default_config)) < 0) { \
 			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to load Tidy configuration file at '%s'.", TG(default_config)); \
 		} \
-	}
+	} \
+	_php_tidy_apply_runtime_config(_doc TSRMLS_CC);
 /* }}} */
 
 /* {{{ ext/tidy structs 
@@ -217,6 +219,7 @@ static void *php_tidy_get_opt_val(PHPTidyDoc *, TidyOption, TidyOptionType * TSR
 static void php_tidy_create_node(INTERNAL_FUNCTION_PARAMETERS, tidy_base_nodetypes);
 static int _php_tidy_set_tidy_opt(TidyDoc, char *, zval * TSRMLS_DC);
 static int _php_tidy_apply_config_array(TidyDoc doc, HashTable *ht_options TSRMLS_DC);
+static int _php_tidy_apply_runtime_config(TidyDoc doc TSRMLS_DC);
 static void _php_tidy_register_nodetypes(INIT_FUNC_ARGS);
 static void _php_tidy_register_tags(INIT_FUNC_ARGS);
 static PHP_INI_MH(php_tidy_set_clean_output);
@@ -227,8 +230,10 @@ static int php_tidy_output_handler(void **nothing, php_output_context *output_co
 static PHP_MINIT_FUNCTION(tidy);
 static PHP_MSHUTDOWN_FUNCTION(tidy);
 static PHP_RINIT_FUNCTION(tidy);
+static PHP_RSHUTDOWN_FUNCTION(tidy);
 static PHP_MINFO_FUNCTION(tidy);
 
+static PHP_FUNCTION(tidy_set_runtime_config);
 static PHP_FUNCTION(tidy_getopt);
 static PHP_FUNCTION(tidy_parse_string);
 static PHP_FUNCTION(tidy_parse_file);
@@ -356,6 +361,10 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO(arginfo_tidy_config_count, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tidy_set_runtime_config, 0, 0, 1)
+	ZEND_ARG_INFO(0, options)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_tidy_getopt, 0, 0, 1)
 	ZEND_ARG_INFO(0, option)
 ZEND_END_ARG_INFO()
@@ -375,6 +384,7 @@ ZEND_END_ARG_INFO()
 /* }}} */
 
 static const zend_function_entry tidy_functions[] = {
+	PHP_FE(tidy_set_runtime_config, arginfo_tidy_set_runtime_config)
 	PHP_FE(tidy_getopt,             arginfo_tidy_getopt)
 	PHP_FE(tidy_parse_string,       arginfo_tidy_parse_string)
 	PHP_FE(tidy_parse_file,         arginfo_tidy_parse_file)
@@ -455,7 +465,7 @@ zend_module_entry tidy_module_entry = {
 	PHP_MINIT(tidy),
 	PHP_MSHUTDOWN(tidy),
 	PHP_RINIT(tidy),
-	NULL,
+	PHP_RSHUTDOWN(tidy),
 	PHP_MINFO(tidy),
 	PHP_TIDY_MODULE_VERSION,
 	PHP_MODULE_GLOBALS(tidy),
@@ -1039,6 +1049,40 @@ static int _php_tidy_apply_config_array(TidyDoc doc, HashTable *ht_options TSRML
 	return SUCCESS;
 }
 
+static int _php_tidy_apply_runtime_config(TidyDoc doc TSRMLS_DC)
+{
+	char *opt_name;
+	zval **opt_val;
+	ulong opt_indx;
+	uint opt_name_len;
+	zend_bool clear_str;
+
+	for (zend_hash_internal_pointer_reset(TG(runtime_config));
+		 zend_hash_get_current_data(TG(runtime_config), (void *) &opt_val) == SUCCESS;
+		 zend_hash_move_forward(TG(runtime_config))) {
+
+		switch (zend_hash_get_current_key_ex(TG(runtime_config), &opt_name, &opt_name_len, &opt_indx, FALSE, NULL)) {
+			case HASH_KEY_IS_STRING:
+			clear_str = 0;
+			break;
+
+			case HASH_KEY_IS_LONG:
+			continue; /* ignore numeric keys */
+
+			default:
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Could not retrieve key from option array");
+			return FAILURE;
+		}
+
+		_php_tidy_set_tidy_opt(doc, opt_name, *opt_val TSRMLS_CC);
+		if (clear_str) {
+			efree(opt_name);
+		}
+	}
+
+	return SUCCESS;
+}
+
 static int php_tidy_parse_string(PHPTidyObj *obj, char *string, int len, char *enc TSRMLS_DC)
 {
 	TidyBuffer buf;
@@ -1087,7 +1131,21 @@ static PHP_MINIT_FUNCTION(tidy)
 
 static PHP_RINIT_FUNCTION(tidy)
 {
+	ALLOC_HASHTABLE(TG(runtime_config));
+	zend_hash_init(TG(runtime_config), 10, NULL, ZVAL_PTR_DTOR, 0);
+
 	php_tidy_clean_output_start(ZEND_STRL("ob_tidyhandler") TSRMLS_CC);
+
+	return SUCCESS;
+}
+
+PHP_RSHUTDOWN_FUNCTION(tidy)
+{
+	if (TG(runtime_config)) {
+		zend_hash_destroy(TG(runtime_config));
+		FREE_HASHTABLE(TG(runtime_config));
+		TG(runtime_config) = NULL;
+	}
 
 	return SUCCESS;
 }
@@ -1519,6 +1577,24 @@ static PHP_FUNCTION(tidy_config_count)
 	TIDY_FETCH_OBJECT;
 
 	RETURN_LONG(tidyConfigErrorCount(obj->ptdoc->doc));
+}
+/* }}} */
+
+/* {{{ proto bool tidy_set_runtime_config(array options)
+   Sets runtime overrides for the default configuration. */
+static PHP_FUNCTION(tidy_set_runtime_config)
+{
+	zval *options;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "a", &options) == FAILURE) {
+		RETURN_FALSE;
+	}
+
+	zend_hash_clean(TG(runtime_config));
+
+	zend_hash_copy(TG(runtime_config), Z_ARRVAL_P(options), (copy_ctor_func_t) zval_add_ref, NULL, sizeof(zval*));
+
+	RETURN_TRUE;
 }
 /* }}} */
 
