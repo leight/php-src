@@ -24,8 +24,7 @@ foo($str[1][0]);
 foo($str[2][1]);
 ?>
 --EXPECTF--
-Notice: Uninitialized string offset: -1 in %sstr_offset_001.php on line %d
-string(0) ""
+string(1) "c"
 string(1) "a"
 string(1) "b"
 string(1) "c"
@@ -36,9 +35,7 @@ string(1) "b"
 
 Notice: Uninitialized string offset: 1 in %sstr_offset_001.php on line %d
 string(0) ""
-
-Notice: Uninitialized string offset: -1 in %sstr_offset_001.php on line %d
-string(0) ""
+string(1) "c"
 string(1) "a"
 string(1) "b"
 string(1) "c"
