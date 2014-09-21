@@ -25,6 +25,9 @@
  * LALR shift/reduce conflicts and how they are resolved:
  *
  * - 2 shift/reduce conflicts due to the dangling elseif/else ambiguity. Solved by shift.
+ * - 1 shift/reduce conflict due to dangling or on while. Solved by shift.
+ * - 1 shift/reduce conflict due to dangling or on for. Solved by shift.
+ * - 2 shift/reduce conflicts due to dangling or on foreach (with/without keys). Solved by shift.
  *
  */
 
@@ -46,7 +49,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %}
 
 %pure_parser
-%expect 2
+%expect 6
 
 %code requires {
 #ifdef ZTS
@@ -226,8 +229,8 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 
 %type <ast> top_statement namespace_name name statement function_declaration_statement
 %type <ast> class_declaration_statement use_declaration const_decl inner_statement
-%type <ast> expr optional_expr while_statement for_statement foreach_variable
-%type <ast> foreach_statement declare_statement finally_statement unset_variable variable
+%type <ast> expr optional_expr while_stmt for_stmt foreach_variable
+%type <ast> foreach_stmt declare_statement finally_statement unset_variable variable
 %type <ast> extends_from parameter optional_type argument expr_without_variable global_var
 %type <ast> static_var class_statement trait_adaptation trait_precedence trait_alias
 %type <ast> absolute_trait_method_reference trait_method_reference property echo_expr
@@ -342,12 +345,10 @@ statement:
 		'{' inner_statement_list '}' { $$ = $2; }
 	|	if_stmt { $$ = $1; }
 	|	alt_if_stmt { $$ = $1; }
-	|	T_WHILE '(' expr ')' while_statement
-			{ $$ = zend_ast_create(ZEND_AST_WHILE, $3, $5); }
+	|	T_WHILE while_stmt { $$ = $2; }
 	|	T_DO statement T_WHILE '(' expr ')' ';'
 			{ $$ = zend_ast_create(ZEND_AST_DO_WHILE, $2, $5); }
-	|	T_FOR '(' for_exprs ';' for_exprs ';' for_exprs ')' for_statement
-			{ $$ = zend_ast_create(ZEND_AST_FOR, $3, $5, $7, $9); }
+	|	T_FOR for_stmt { $$ = $2; }
 	|	T_SWITCH '(' expr ')' switch_case_list
 			{ $$ = zend_ast_create(ZEND_AST_SWITCH, $3, $5); }
 	|	T_BREAK optional_expr ';'		{ $$ = zend_ast_create(ZEND_AST_BREAK, $2); }
@@ -359,11 +360,7 @@ statement:
 	|	T_INLINE_HTML { $$ = zend_ast_create(ZEND_AST_ECHO, $1); }
 	|	expr ';' { $$ = $1; }
 	|	T_UNSET '(' unset_variables ')' ';' { $$ = $3; }
-	|	T_FOREACH '(' expr T_AS foreach_variable ')' foreach_statement
-			{ $$ = zend_ast_create(ZEND_AST_FOREACH, $3, $5, NULL, $7); }
-	|	T_FOREACH '(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')'
-		foreach_statement
-			{ $$ = zend_ast_create(ZEND_AST_FOREACH, $3, $7, $5, $9); }
+	|	T_FOREACH foreach_stmt { $$ = $2; }
 	|	T_DECLARE '(' const_list ')'
 			{ zend_handle_encoding_declaration($3 TSRMLS_CC); }
 		declare_statement
@@ -453,14 +450,22 @@ foreach_variable:
 	|	T_LIST '(' assignment_list ')' { $$ = $3; }
 ;
 
-for_statement:
-		statement { $$ = $1; }
-	|	':' inner_statement_list T_ENDFOR ';' { $$ = $2; }
+for_stmt:
+		'(' for_exprs ';' for_exprs ';' for_exprs ')' statement { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $8); }
+	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOR_DEFAULT, $2, $4, $6, $8, $10); }
+	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' ':' inner_statement_list T_ENDFOR ';' { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $9); }
+	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOR ';' { $$ = zend_ast_create(ZEND_AST_FOR_DEFAULT, $2, $4, $6, $9, $12); }
 ;
 
-foreach_statement:
-		statement { $$ = $1; }
-	|	':' inner_statement_list T_ENDFOREACH ';' { $$ = $2; }
+foreach_stmt:
+		'(' expr T_AS foreach_variable ')' statement { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $6); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' statement { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $8); }
+	|	'(' expr T_AS foreach_variable ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $4, NULL, $6, $8); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $6, $4, $8, $10); }
+	|	'(' expr T_AS foreach_variable ')' ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $7); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $9); }
+	|	'(' expr T_AS foreach_variable ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $4, NULL, $7, $10); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $6, $4, $9, $12); }
 ;
 
 declare_statement:
@@ -488,12 +493,12 @@ case_separator:
 	|	';'
 ;
 
-
-while_statement:
-		statement { $$ = $1; }
-	|	':' inner_statement_list T_ENDWHILE ';' { $$ = $2; }
+while_stmt:
+		'(' expr ')' statement { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $4); }
+	|	'(' expr ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_WHILE_DEFAULT, $2, $4, $6); }
+	|	'(' expr ')' ':' inner_statement_list T_ENDWHILE ';' { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $5); }
+	|	'(' expr ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDWHILE ';' { $$ = zend_ast_create(ZEND_AST_WHILE_DEFAULT, $2, $5, $8); }
 ;
-
 
 if_stmt_without_else:
 		T_IF '(' expr ')' statement

@@ -136,6 +136,7 @@ enum _zend_ast_kind {
 	ZEND_AST_METHOD_CALL = 3 << ZEND_AST_NUM_CHILDREN_SHIFT,
 	ZEND_AST_STATIC_CALL,
 	ZEND_AST_CONDITIONAL,
+	ZEND_AST_WHILE_DEFAULT,
 
 	ZEND_AST_TRY,
 	ZEND_AST_CATCH,
@@ -144,6 +145,10 @@ enum _zend_ast_kind {
 	/* 4 child nodes */
 	ZEND_AST_FOR = 4 << ZEND_AST_NUM_CHILDREN_SHIFT,
 	ZEND_AST_FOREACH,
+
+	/* 5 child nodes */
+	ZEND_AST_FOR_DEFAULT = 5 << ZEND_AST_NUM_CHILDREN_SHIFT,
+	ZEND_AST_FOREACH_DEFAULT,
 };
 
 typedef uint16_t zend_ast_kind;

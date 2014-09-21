@@ -1816,6 +1816,7 @@ static inline void zend_update_jump_target(uint32_t opnum_jump, uint32_t opnum_t
 			break;
 		case ZEND_JMPZ:
 		case ZEND_JMPNZ:
+		case ZEND_JMPZNZ:
 		case ZEND_JMPZ_EX:
 		case ZEND_JMPNZ_EX:
 			opline->op2.opline_num = opnum_target;
@@ -1828,6 +1829,13 @@ static inline void zend_update_jump_target(uint32_t opnum_jump, uint32_t opnum_t
 static inline void zend_update_jump_target_to_next(uint32_t opnum_jump TSRMLS_DC) /* {{{ */ 
 {
 	zend_update_jump_target(opnum_jump, get_next_op_number(CG(active_op_array)) TSRMLS_CC);
+}
+/* }}} */
+
+static inline void zend_set_op_ev(uint32_t opnum_target, zend_ulong extended_value TSRMLS_DC) /* {{{ */
+{
+	zend_op *opline = &CG(active_op_array)->opcodes[opnum_target];
+	opline->extended_value = extended_value;
 }
 /* }}} */
 
@@ -3302,6 +3310,46 @@ void zend_compile_while(zend_ast *ast TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_while_default(zend_ast *ast TSRMLS_DC) /* {{{ */
+{
+	zend_ast *cond_ast = ast->child[0];
+	zend_ast *stmt_ast = ast->child[1];
+	zend_ast *else_ast = ast->child[2];
+
+	znode cond_node;
+	uint32_t opnum_start, loop_start, default_start, opnum_jmpz, opnum_jmpznz;
+
+	zend_compile_expr(&cond_node, cond_ast TSRMLS_CC);
+	opnum_jmpznz = zend_emit_cond_jump(ZEND_JMPZNZ, &cond_node, 0 TSRMLS_CC);
+
+	opnum_start = get_next_op_number(CG(active_op_array));
+	zend_compile_expr(&cond_node, cond_ast TSRMLS_CC);
+
+	opnum_jmpz = zend_emit_cond_jump(ZEND_JMPZ, &cond_node, 0 TSRMLS_CC);
+	zend_begin_loop(TSRMLS_C);
+
+	loop_start = get_next_op_number(CG(active_op_array));
+	zend_compile_stmt(stmt_ast TSRMLS_CC);
+
+	zend_emit_jump(opnum_start TSRMLS_CC);
+
+	zend_update_jump_target_to_next(opnum_jmpz TSRMLS_CC);
+
+	default_start = get_next_op_number(CG(active_op_array));
+	zend_compile_stmt(else_ast TSRMLS_CC);
+
+	zend_update_jump_target_to_next(opnum_jmpz TSRMLS_CC);
+
+	// Set JMPZ behaviour
+	zend_update_jump_target(opnum_jmpznz, default_start);
+
+	// Set JMPNZ behaviour
+	zend_set_op_ev(opnum_jmpznz, loop_start);
+	
+	zend_end_loop(opnum_start, 0 TSRMLS_CC);
+}
+/* }}} */
+
 void zend_compile_do_while(zend_ast *ast TSRMLS_DC) /* {{{ */
 {
 	zend_ast *stmt_ast = ast->child[0];
@@ -3380,12 +3428,64 @@ void zend_compile_for(zend_ast *ast TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_for_default(zend_ast *ast TSRMLS_DC) /* {{{ */
+{
+	zend_ast *init_ast = ast->child[0];
+	zend_ast *cond_ast = ast->child[1];
+	zend_ast *loop_ast = ast->child[2];
+	zend_ast *stmt_ast = ast->child[3];
+	zend_ast *else_ast = ast->child[4];
+
+	znode result;
+	uint32_t opnum_cond, opnum_jmpz, opnum_loop, default_start, loop_start, opnum_jmpznz;
+
+	zend_compile_expr_list(&result, init_ast TSRMLS_CC);
+	zend_do_free(&result TSRMLS_CC);
+
+	zend_compile_expr_list(&result, cond_ast TSRMLS_CC);
+	zend_do_extended_info(TSRMLS_C);
+
+	opnum_jmpznz = zend_emit_cond_jump(ZEND_JMPZNZ, &result, 0 TSRMLS_CC);
+	zend_do_free(&result TSRMLS_CC);
+
+	opnum_cond = get_next_op_number(CG(active_op_array));
+	zend_compile_expr_list(&result, cond_ast TSRMLS_CC);
+	zend_do_extended_info(TSRMLS_C);
+
+	opnum_jmpz = zend_emit_cond_jump(ZEND_JMPZ, &result, 0 TSRMLS_CC);
+	zend_begin_loop(TSRMLS_C);
+
+	loop_start = get_next_op_number(CG(active_op_array));
+	zend_compile_stmt(stmt_ast TSRMLS_CC);
+
+	opnum_loop = get_next_op_number(CG(active_op_array));
+	zend_compile_expr_list(&result, loop_ast TSRMLS_CC);
+	zend_do_free(&result TSRMLS_CC);
+
+	zend_emit_jump(opnum_cond TSRMLS_CC);
+
+	default_start = get_next_op_number(CG(active_op_array));
+	zend_compile_stmt(else_ast TSRMLS_CC);
+
+	zend_update_jump_target_to_next(opnum_jmpz TSRMLS_CC);
+
+	// Set JMPZ behaviour
+	zend_update_jump_target(opnum_jmpznz, default_start);
+
+	// Set JMPNZ behaviour
+	zend_set_op_ev(opnum_jmpznz, loop_start);
+
+	zend_end_loop(opnum_loop, 0 TSRMLS_CC);
+}
+/* }}} */
+
 void zend_compile_foreach(zend_ast *ast TSRMLS_DC) /* {{{ */
 {
 	zend_ast *expr_ast = ast->child[0];
 	zend_ast *value_ast = ast->child[1];
 	zend_ast *key_ast = ast->child[2];
 	zend_ast *stmt_ast = ast->child[3];
+
 	zend_bool by_ref = value_ast->kind == ZEND_AST_REF;
 	zend_bool is_variable = zend_is_variable(expr_ast) && !zend_is_call(expr_ast)
 		&& zend_can_write_to_variable(expr_ast);
@@ -3472,6 +3572,135 @@ void zend_compile_foreach(zend_ast *ast TSRMLS_DC) /* {{{ */
 
 	opline = &CG(active_op_array)->opcodes[opnum_fetch];
 	opline->op2.opline_num = get_next_op_number(CG(active_op_array));
+
+	zend_end_loop(opnum_fetch, 1 TSRMLS_CC);
+
+	generate_free_loop_var(&reset_node TSRMLS_CC);
+	zend_stack_del_top(&CG(loop_var_stack));
+}
+/* }}} */
+
+void zend_compile_foreach_default(zend_ast *ast TSRMLS_DC) /* {{{ */
+{
+	zend_ast *expr_ast = ast->child[0];
+	zend_ast *value_ast = ast->child[1];
+	zend_ast *key_ast = ast->child[2];
+	zend_ast *stmt_ast = ast->child[3];
+	zend_ast *else_ast = ast->child[4];
+
+	zend_bool by_ref = value_ast->kind == ZEND_AST_REF;
+	zend_bool is_variable = zend_is_variable(expr_ast) && !zend_is_call(expr_ast)
+		&& zend_can_write_to_variable(expr_ast);
+
+	znode expr_node, reset_node, value_node, key_node, dummy_node;
+	zend_op *opline, *fetch_opline, *reset_opline, *data_opline;
+	uint32_t opnum_reset, opnum_fetch, opnum_default_reset, opnum_default_fetch,
+		loop_start, default_start, opnum_jmp;
+
+	if (key_ast) {
+		if (key_ast->kind == ZEND_AST_REF) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Key element cannot be a reference");
+		}
+		if (key_ast->kind == ZEND_AST_LIST) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Cannot use list as key element");
+		}
+	}
+
+	if (by_ref) {
+		value_ast = value_ast->child[0];
+	}
+
+	if (by_ref && is_variable) {
+		zend_compile_var(&expr_node, expr_ast, BP_VAR_W TSRMLS_CC);
+	} else {
+		zend_compile_expr(&expr_node, expr_ast TSRMLS_CC);
+	}
+
+	if (by_ref) {
+		zend_separate_if_call_and_write(&expr_node, expr_ast, BP_VAR_W TSRMLS_CC);
+	}
+
+	opnum_default_reset = get_next_op_number(CG(active_op_array));
+	reset_opline = opline = zend_emit_op(&reset_node, ZEND_FE_RESET, &expr_node, NULL TSRMLS_CC);
+	if (by_ref && is_variable) {
+		opline->extended_value = ZEND_FE_FETCH_BYREF;
+	}
+
+	zend_stack_push(&CG(loop_var_stack), &reset_node);
+
+	opnum_default_fetch = get_next_op_number(CG(active_op_array));
+	fetch_opline = opline = zend_emit_op(&value_node, ZEND_FE_FETCH, &reset_node, NULL TSRMLS_CC);
+	if (by_ref) {
+		opline->extended_value |= ZEND_FE_FETCH_BYREF;
+	}
+	if (key_ast) {
+		opline->extended_value |= ZEND_FE_FETCH_WITH_KEY;
+	}
+
+	data_opline = opline = zend_emit_op(NULL, ZEND_OP_DATA, NULL, NULL TSRMLS_CC);
+
+	/* Allocate enough space to keep HashPointer on VM stack */
+	opline->op1_type = IS_TMP_VAR;
+	opline->op1.var = get_temporary_variable(CG(active_op_array));
+	if (sizeof(HashPointer) > sizeof(zval)) {
+		/* Make sure 1 zval is enough for HashPointer (2 must be enough) */
+		get_temporary_variable(CG(active_op_array));
+	}
+
+	if (key_ast) {
+		zend_make_tmp_result(&key_node, opline TSRMLS_CC);
+	}
+
+	if (value_ast->attr == ZEND_AST_LIST) {
+		zend_compile_list_assign(&dummy_node, value_ast, &value_node TSRMLS_CC);
+		zend_do_free(&dummy_node TSRMLS_CC);
+	} else if (by_ref) {
+		zend_emit_assign_ref_znode(value_ast, &value_node TSRMLS_CC);
+	} else {
+		zend_emit_assign_znode(value_ast, &value_node TSRMLS_CC);
+	}
+
+	if (key_ast) {
+		zend_emit_assign_znode(key_ast, &key_node TSRMLS_CC);
+	}
+
+	opnum_jmp = get_next_op_number(CG(active_op_array));
+	zend_emit_jump(0 TSRMLS_CC);
+
+	opnum_reset = get_next_op_number(CG(active_op_array));
+	opline = get_next_op(CG(active_op_array) TSRMLS_CC);
+	memcpy(opline, reset_opline, sizeof(zend_op));
+
+	opnum_fetch = get_next_op_number(CG(active_op_array));
+	opline = get_next_op(CG(active_op_array) TSRMLS_CC);
+	memcpy(opline, fetch_opline, sizeof(zend_op));
+
+	opline = get_next_op(CG(active_op_array) TSRMLS_CC);
+	memcpy(opline, data_opline, sizeof(zend_op));
+
+	loop_start = get_next_op_number(CG(active_op_array));
+	zend_update_jump_target(opnum_jmp, loop_start);
+
+	zend_begin_loop(TSRMLS_C);
+
+	zend_compile_stmt(stmt_ast TSRMLS_CC);
+
+	zend_emit_jump(opnum_fetch TSRMLS_CC);
+
+	default_start = get_next_op_number(CG(active_op_array));
+	zend_compile_stmt(else_ast TSRMLS_CC);
+
+	opline = &CG(active_op_array)->opcodes[opnum_reset];
+	opline->op2.opline_num = get_next_op_number(CG(active_op_array));
+
+	opline = &CG(active_op_array)->opcodes[opnum_fetch];
+	opline->op2.opline_num = get_next_op_number(CG(active_op_array));
+
+	opline = &CG(active_op_array)->opcodes[opnum_default_reset];
+	opline->op2.opline_num = default_start;
+
+	opline = &CG(active_op_array)->opcodes[opnum_default_fetch];
+	opline->op2.opline_num = default_start;
 
 	zend_end_loop(opnum_fetch, 1 TSRMLS_CC);
 
@@ -6085,14 +6314,23 @@ void zend_compile_stmt(zend_ast *ast TSRMLS_DC) /* {{{ */
 		case ZEND_AST_WHILE:
 			zend_compile_while(ast TSRMLS_CC);
 			break;
+		case ZEND_AST_WHILE_DEFAULT:
+			zend_compile_while_default(ast TSRMLS_CC);
+			break;
 		case ZEND_AST_DO_WHILE:
 			zend_compile_do_while(ast TSRMLS_CC);
 			break;
 		case ZEND_AST_FOR:
 			zend_compile_for(ast TSRMLS_CC);
 			break;
+		case ZEND_AST_FOR_DEFAULT:
+			zend_compile_for_default(ast TSRMLS_CC);
+			break;
 		case ZEND_AST_FOREACH:
 			zend_compile_foreach(ast TSRMLS_CC);
+			break;
+		case ZEND_AST_FOREACH_DEFAULT:
+			zend_compile_foreach_default(ast TSRMLS_CC);
 			break;
 		case ZEND_AST_IF:
 			zend_compile_if(ast TSRMLS_CC);
