@@ -229,7 +229,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 
 %type <ast> top_statement namespace_name name statement function_declaration_statement
 %type <ast> class_declaration_statement use_declaration const_decl inner_statement
-%type <ast> expr optional_expr while_stmt for_stmt foreach_variable
+%type <ast> expr optional_expr while_stmt for_stmt foreach_variable loop_or alt_loop_or
 %type <ast> foreach_stmt declare_statement finally_statement unset_variable variable
 %type <ast> extends_from parameter optional_type argument expr_without_variable global_var
 %type <ast> static_var class_statement trait_adaptation trait_precedence trait_alias
@@ -451,21 +451,15 @@ foreach_variable:
 ;
 
 for_stmt:
-		'(' for_exprs ';' for_exprs ';' for_exprs ')' statement { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $8); }
-	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOR_DEFAULT, $2, $4, $6, $8, $10); }
-	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' ':' inner_statement_list T_ENDFOR ';' { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $9); }
-	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOR ';' { $$ = zend_ast_create(ZEND_AST_FOR_DEFAULT, $2, $4, $6, $9, $12); }
+		'(' for_exprs ';' for_exprs ';' for_exprs ')' statement loop_or { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $8, $9); }
+	|	'(' for_exprs ';' for_exprs ';' for_exprs ')' ':' inner_statement_list alt_loop_or T_ENDFOR ';' { $$ = zend_ast_create(ZEND_AST_FOR, $2, $4, $6, $9, $10); }
 ;
 
 foreach_stmt:
-		'(' expr T_AS foreach_variable ')' statement { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $6); }
-	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' statement { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $8); }
-	|	'(' expr T_AS foreach_variable ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $4, NULL, $6, $8); }
-	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $6, $4, $8, $10); }
-	|	'(' expr T_AS foreach_variable ')' ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $7); }
-	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $9); }
-	|	'(' expr T_AS foreach_variable ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $4, NULL, $7, $10); }
-	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH_DEFAULT, $2, $6, $4, $9, $12); }
+		'(' expr T_AS foreach_variable ')' statement loop_or { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $6, $7); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' statement loop_or{ $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $8, $9); }
+	|	'(' expr T_AS foreach_variable ')' ':' inner_statement_list alt_loop_or T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $4, NULL, $7, $8); }
+	|	'(' expr T_AS foreach_variable T_DOUBLE_ARROW foreach_variable ')' ':' inner_statement_list alt_loop_or T_ENDFOREACH ';' { $$ = zend_ast_create(ZEND_AST_FOREACH, $2, $6, $4, $9, $10); }
 ;
 
 declare_statement:
@@ -493,11 +487,19 @@ case_separator:
 	|	';'
 ;
 
+loop_or:
+		/* empty */	{ $$ = NULL; }
+	|	T_LOGICAL_OR statement { $$ = $2; }
+;
+
+alt_loop_or:
+		/* empty */	{ $$ = NULL; }
+	|	T_LOGICAL_OR ':' inner_statement_list { $$ = $3; }
+;
+
 while_stmt:
-		'(' expr ')' statement { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $4); }
-	|	'(' expr ')' statement T_LOGICAL_OR statement { $$ = zend_ast_create(ZEND_AST_WHILE_DEFAULT, $2, $4, $6); }
-	|	'(' expr ')' ':' inner_statement_list T_ENDWHILE ';' { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $5); }
-	|	'(' expr ')' ':' inner_statement_list T_LOGICAL_OR ':' inner_statement_list T_ENDWHILE ';' { $$ = zend_ast_create(ZEND_AST_WHILE_DEFAULT, $2, $5, $8); }
+		'(' expr ')' statement loop_or { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $4, $5); }
+	|	'(' expr ')' ':' inner_statement_list alt_loop_or T_ENDWHILE ';' { $$ = zend_ast_create(ZEND_AST_WHILE, $2, $5, $6); }
 ;
 
 if_stmt_without_else:
