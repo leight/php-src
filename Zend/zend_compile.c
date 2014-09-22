@@ -3678,6 +3678,19 @@ void zend_compile_foreach_default(zend_ast *ast TSRMLS_DC) /* {{{ */
 	opline = get_next_op(CG(active_op_array) TSRMLS_CC);
 	memcpy(opline, data_opline, sizeof(zend_op));
 
+	if (value_ast->attr == ZEND_AST_LIST) {
+		zend_compile_list_assign(&dummy_node, value_ast, &value_node TSRMLS_CC);
+		zend_do_free(&dummy_node TSRMLS_CC);
+	} else if (by_ref) {
+		zend_emit_assign_ref_znode(value_ast, &value_node TSRMLS_CC);
+	} else {
+		zend_emit_assign_znode(value_ast, &value_node TSRMLS_CC);
+	}
+
+	if (key_ast) {
+		zend_emit_assign_znode(key_ast, &key_node TSRMLS_CC);
+	}
+
 	loop_start = get_next_op_number(CG(active_op_array));
 	zend_update_jump_target(opnum_jmp, loop_start);
 
