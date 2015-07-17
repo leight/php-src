@@ -528,7 +528,8 @@ foreach_variable:
 ;
 
 for_statement:
-		'{' inner_statement_list '}' { $$ = $2; }
+		';' { $$ = NULL; }
+	|	'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDFOR ';' { $$ = $2; }
 ;
 
@@ -538,7 +539,8 @@ foreach_statement:
 ;
 
 declare_statement:
-		'{' inner_statement_list '}' { $$ = $2; }
+		';' { $$ = NULL; }
+	|	'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDDECLARE ';' { $$ = $2; }
 ;
 
@@ -564,7 +566,8 @@ case_separator:
 
 
 while_statement:
-		'{' inner_statement_list '}' { $$ = $2; }
+		';' { $$ = NULL; }
+	|	'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDWHILE ';' { $$ = $2; }
 ;
 
