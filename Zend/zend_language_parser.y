@@ -405,8 +405,8 @@ statement:
 	|	alt_if_stmt { $$ = $1; }
 	|	T_WHILE '(' expr ')' while_statement
 			{ $$ = zend_ast_create(ZEND_AST_WHILE, $3, $5); }
-	|	T_DO statement T_WHILE '(' expr ')' ';'
-			{ $$ = zend_ast_create(ZEND_AST_DO_WHILE, $2, $5); }
+	|	T_DO '{' inner_statement_list '}' T_WHILE '(' expr ')' ';'
+			{ $$ = zend_ast_create(ZEND_AST_DO_WHILE, $3, $7); }
 	|	T_FOR '(' for_exprs ';' for_exprs ';' for_exprs ')' for_statement
 			{ $$ = zend_ast_create(ZEND_AST_FOR, $3, $5, $7, $9); }
 	|	T_SWITCH '(' expr ')' switch_case_list
@@ -528,17 +528,17 @@ foreach_variable:
 ;
 
 for_statement:
-		statement { $$ = $1; }
+		'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDFOR ';' { $$ = $2; }
 ;
 
 foreach_statement:
-		statement { $$ = $1; }
+		'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDFOREACH ';' { $$ = $2; }
 ;
 
 declare_statement:
-		statement { $$ = $1; }
+		'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDDECLARE ';' { $$ = $2; }
 ;
 
@@ -564,24 +564,24 @@ case_separator:
 
 
 while_statement:
-		statement { $$ = $1; }
+		'{' inner_statement_list '}' { $$ = $2; }
 	|	':' inner_statement_list T_ENDWHILE ';' { $$ = $2; }
 ;
 
 
 if_stmt_without_else:
-		T_IF '(' expr ')' statement
+		T_IF '(' expr ')' '{' inner_statement_list '}'
 			{ $$ = zend_ast_create_list(1, ZEND_AST_IF,
-			      zend_ast_create(ZEND_AST_IF_ELEM, $3, $5)); }
-	|	if_stmt_without_else T_ELSEIF '(' expr ')' statement
+			      zend_ast_create(ZEND_AST_IF_ELEM, $3, $6)); }
+	|	if_stmt_without_else T_ELSEIF '(' expr ')' '{' inner_statement_list '}'
 			{ $$ = zend_ast_list_add($1,
-			      zend_ast_create(ZEND_AST_IF_ELEM, $4, $6)); }
+			      zend_ast_create(ZEND_AST_IF_ELEM, $4, $7)); }
 ;
 
 if_stmt:
 		if_stmt_without_else %prec T_NOELSE { $$ = $1; }
-	|	if_stmt_without_else T_ELSE statement
-			{ $$ = zend_ast_list_add($1, zend_ast_create(ZEND_AST_IF_ELEM, NULL, $3)); }
+	|	if_stmt_without_else T_ELSE '{' inner_statement_list '}'
+			{ $$ = zend_ast_list_add($1, zend_ast_create(ZEND_AST_IF_ELEM, NULL, $4)); }
 ;
 
 alt_if_stmt_without_else:
