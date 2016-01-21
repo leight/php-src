@@ -1408,6 +1408,9 @@ session.cache_limiter = nocache
 ; http://php.net/session.cache-expire
 session.cache_expire = 180
 
+; Set to the desired length for session id's
+session.sid_length = 32
+
 ; trans sid support is disabled by default.
 ; Use of trans sid may risk your users' security.
 ; Use this option with caution.

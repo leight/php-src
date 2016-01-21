@@ -189,11 +189,8 @@ typedef struct _php_ps_globals {
 	zend_bool use_only_cookies;
 	zend_bool use_trans_sid; /* contains the INI value of whether to use trans-sid */
 
-	zend_long hash_func;
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-	php_hash_ops *hash_ops;
-#endif
 	zend_long hash_bits_per_character;
+	zend_long sid_length;
 	int send_cookie;
 	int define_sid;
 
