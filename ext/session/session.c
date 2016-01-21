@@ -365,60 +365,6 @@ PHPAPI zend_string *php_session_create_id(PS_CREATE_SID_ARGS) /* {{{ */
 	}
 	efree(buf);
 
-	if (PS(entropy_length) > 0) {
-#ifdef PHP_WIN32
-		unsigned char rbuf[2048];
-		size_t toread = PS(entropy_length);
-
-		if (php_win32_get_random_bytes(rbuf, MIN(toread, sizeof(rbuf))) == SUCCESS){
-
-			switch (PS(hash_func)) {
-				case PS_HASH_FUNC_MD5:
-					PHP_MD5Update(&md5_context, rbuf, toread);
-					break;
-				case PS_HASH_FUNC_SHA1:
-					PHP_SHA1Update(&sha1_context, rbuf, toread);
-					break;
-# if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-				case PS_HASH_FUNC_OTHER:
-					PS(hash_ops)->hash_update(hash_context, rbuf, toread);
-					break;
-# endif /* HAVE_HASH_EXT */
-			}
-		}
-#else
-		int fd;
-
-		fd = VCWD_OPEN(PS(entropy_file), O_RDONLY);
-		if (fd >= 0) {
-			unsigned char rbuf[2048];
-			int n;
-			int to_read = PS(entropy_length);
-
-			while (to_read > 0) {
-				n = read(fd, rbuf, MIN(to_read, sizeof(rbuf)));
-				if (n <= 0) break;
-
-				switch (PS(hash_func)) {
-					case PS_HASH_FUNC_MD5:
-						PHP_MD5Update(&md5_context, rbuf, n);
-						break;
-					case PS_HASH_FUNC_SHA1:
-						PHP_SHA1Update(&sha1_context, rbuf, n);
-						break;
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-					case PS_HASH_FUNC_OTHER:
-						PS(hash_ops)->hash_update(hash_context, rbuf, n);
-						break;
-#endif /* HAVE_HASH_EXT */
-				}
-				to_read -= n;
-			}
-			close(fd);
-		}
-#endif
-	}
-
 	digest = emalloc(digest_len + 1);
 	switch (PS(hash_func)) {
 		case PS_HASH_FUNC_MD5:
@@ -851,16 +797,6 @@ PHP_INI_BEGIN()
 	STD_PHP_INI_BOOLEAN("session.use_only_cookies", "1",         PHP_INI_ALL, OnUpdateBool,   use_only_cookies,   php_ps_globals,    ps_globals)
 	STD_PHP_INI_BOOLEAN("session.use_strict_mode",  "0",         PHP_INI_ALL, OnUpdateBool,   use_strict_mode,    php_ps_globals,    ps_globals)
 	STD_PHP_INI_ENTRY("session.referer_check",      "",          PHP_INI_ALL, OnUpdateString, extern_referer_chk, php_ps_globals,    ps_globals)
-#if HAVE_DEV_URANDOM
-	STD_PHP_INI_ENTRY("session.entropy_file",       "/dev/urandom",          PHP_INI_ALL, OnUpdateString, entropy_file,       php_ps_globals,    ps_globals)
-	STD_PHP_INI_ENTRY("session.entropy_length",     "32",         PHP_INI_ALL, OnUpdateLong,   entropy_length,     php_ps_globals,    ps_globals)
-#elif HAVE_DEV_ARANDOM
-	STD_PHP_INI_ENTRY("session.entropy_file",       "/dev/arandom",          PHP_INI_ALL, OnUpdateString, entropy_file,       php_ps_globals,    ps_globals)
-	STD_PHP_INI_ENTRY("session.entropy_length",     "32",         PHP_INI_ALL, OnUpdateLong,   entropy_length,     php_ps_globals,    ps_globals)
-#else
-	STD_PHP_INI_ENTRY("session.entropy_file",       "",          PHP_INI_ALL, OnUpdateString, entropy_file,       php_ps_globals,    ps_globals)
-	STD_PHP_INI_ENTRY("session.entropy_length",     "0",         PHP_INI_ALL, OnUpdateLong,   entropy_length,     php_ps_globals,    ps_globals)
-#endif
 	STD_PHP_INI_ENTRY("session.cache_limiter",      "nocache",   PHP_INI_ALL, OnUpdateString, cache_limiter,      php_ps_globals,    ps_globals)
 	STD_PHP_INI_ENTRY("session.cache_expire",       "180",       PHP_INI_ALL, OnUpdateLong,   cache_expire,       php_ps_globals,    ps_globals)
 	PHP_INI_ENTRY("session.use_trans_sid",          "0",         PHP_INI_ALL, OnUpdateTransSid)

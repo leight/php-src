@@ -151,9 +151,7 @@ typedef struct _php_ps_globals {
 	char *session_name;
 	zend_string *id;
 	char *extern_referer_chk;
-	char *entropy_file;
 	char *cache_limiter;
-	zend_long entropy_length;
 	zend_long cookie_lifetime;
 	char *cookie_path;
 	char *cookie_domain;
