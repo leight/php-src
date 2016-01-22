@@ -46,7 +46,7 @@
 #include "ext/date/php_date.h"
 #include "ext/standard/php_lcg.h"
 #include "ext/standard/url_scanner_ex.h"
-#include "ext/standard/php_rand.h" /* for RAND_MAX */
+#include "ext/standard/php_random.h"
 #include "ext/standard/info.h"
 #include "zend_smart_str.h"
 #include "ext/standard/url.h"
@@ -266,7 +266,7 @@ enum {
 };
 
 /* returns a pointer to the byte after the last valid character in out */
-static char *bin_to_readable(char *in, size_t inlen, char *out, char nbits) /* {{{ */
+static char *bin_to_readable(char *in, size_t inlen, char *out, char nbits, size_t limit) /* {{{ */
 {
 	unsigned char *p, *q;
 	unsigned short w;
@@ -280,7 +280,7 @@ static char *bin_to_readable(char *in, size_t inlen, char *out, char nbits) /* {
 	have = 0;
 	mask = (1 << nbits) - 1;
 
-	while (1) {
+	while (limit--) {
 		if (have < nbits) {
 			if (p < q) {
 				w |= *p++ << have;
@@ -306,91 +306,27 @@ static char *bin_to_readable(char *in, size_t inlen, char *out, char nbits) /* {
 
 PHPAPI zend_string *php_session_create_id(PS_CREATE_SID_ARGS) /* {{{ */
 {
-	PHP_MD5_CTX md5_context;
-	PHP_SHA1_CTX sha1_context;
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-	void *hash_context = NULL;
-#endif
-	unsigned char *digest;
-	size_t digest_len;
-	char *buf;
-	struct timeval tv;
-	zval *array;
-	zval *token;
 	zend_string *outid;
-	char *remote_addr = NULL;
+	unsigned int random_len;
+	char *random_buf;
 
-	gettimeofday(&tv, NULL);
-
-	if ((array = zend_hash_str_find(&EG(symbol_table), "_SERVER", sizeof("_SERVER") - 1)) &&
-		Z_TYPE_P(array) == IS_ARRAY &&
-		(token = zend_hash_str_find(Z_ARRVAL_P(array), "REMOTE_ADDR", sizeof("REMOTE_ADDR") - 1)) &&
-		Z_TYPE_P(token) == IS_STRING
-	) {
-		remote_addr = Z_STRVAL_P(token);
-	}
-
-	/* maximum 15+19+19+10 bytes */
-	spprintf(&buf, 0, "%.15s%ld" ZEND_LONG_FMT "%0.8F", remote_addr ? remote_addr : "", tv.tv_sec, (zend_long)tv.tv_usec, php_combined_lcg() * 10);
-
-	switch (PS(hash_func)) {
-		case PS_HASH_FUNC_MD5:
-			PHP_MD5Init(&md5_context);
-			PHP_MD5Update(&md5_context, (unsigned char *) buf, strlen(buf));
-			digest_len = 16;
-			break;
-		case PS_HASH_FUNC_SHA1:
-			PHP_SHA1Init(&sha1_context);
-			PHP_SHA1Update(&sha1_context, (unsigned char *) buf, strlen(buf));
-			digest_len = 20;
-			break;
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-		case PS_HASH_FUNC_OTHER:
-			if (!PS(hash_ops)) {
-				efree(buf);
-				php_error_docref(NULL, E_ERROR, "Invalid session hash function");
-				return NULL;
-			}
-
-			hash_context = emalloc(PS(hash_ops)->context_size);
-			PS(hash_ops)->hash_init(hash_context);
-			PS(hash_ops)->hash_update(hash_context, (unsigned char *) buf, strlen(buf));
-			digest_len = PS(hash_ops)->digest_size;
-			break;
-#endif /* HAVE_HASH_EXT */
-		default:
-			efree(buf);
-			php_error_docref(NULL, E_ERROR, "Invalid session hash function");
-			return NULL;
-	}
-	efree(buf);
-
-	digest = emalloc(digest_len + 1);
-	switch (PS(hash_func)) {
-		case PS_HASH_FUNC_MD5:
-			PHP_MD5Final(digest, &md5_context);
-			break;
-		case PS_HASH_FUNC_SHA1:
-			PHP_SHA1Final(digest, &sha1_context);
-			break;
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-		case PS_HASH_FUNC_OTHER:
-			PS(hash_ops)->hash_final(digest, hash_context);
-			efree(hash_context);
-			break;
-#endif /* HAVE_HASH_EXT */
-	}
-
-	if (PS(hash_bits_per_character) < 4
-			|| PS(hash_bits_per_character) > 6) {
+	if (PS(hash_bits_per_character) < 4 || PS(hash_bits_per_character) > 6) {
 		PS(hash_bits_per_character) = 4;
-
-		php_error_docref(NULL, E_WARNING, "The ini setting hash_bits_per_character is out of range (should be 4, 5, or 6) - using 4 for now");
+		php_error_docref(NULL, E_WARNING, "The ini setting session.hash_bits_per_character is out of range (should be 4, 5, or 6) - using 4 for now");
 	}
 
-	outid = zend_string_alloc((digest_len + 2) * ((8.0f / PS(hash_bits_per_character) + 0.5)), 0);
-	ZSTR_LEN(outid) = (size_t)(bin_to_readable((char *)digest, digest_len, ZSTR_VAL(outid), (char)PS(hash_bits_per_character)) - (char *)&ZSTR_VAL(outid));
-	efree(digest);
+	if (PS(sid_length) < 32 || PS(sid_length) > 128) {
+		PS(hash_bits_per_character) = 4;
+		php_error_docref(NULL, E_WARNING, "The ini setting session.sid_length is out of range (should be between 32 and 128) - using 32 for now");
+	}
+	
+	random_len = (PS(sid_length) * PS(hash_bits_per_character) / 8.0f) + 1;
+	random_buf = emalloc(random_len);
+	php_random_bytes_throw(random_buf, random_len);
+
+	outid = zend_string_alloc(PS(sid_length) + 1, 0);
+	bin_to_readable(random_buf, random_len, ZSTR_VAL(outid), (char)PS(hash_bits_per_character), PS(sid_length));
+	efree(random_buf);
 
 	return outid;
 }
@@ -713,46 +649,19 @@ static PHP_INI_MH(OnUpdateHashFunc) /* {{{ */
 	zend_long val;
 	char *endptr = NULL;
 
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-	PS(hash_ops) = NULL;
-#endif
-
 	val = ZEND_STRTOL(ZSTR_VAL(new_value), &endptr, 10);
-	if (endptr && (*endptr == '\0')) {
+	if (endptr && (*endptr == '\0') && !val) {
 		/* Numeric value */
-		PS(hash_func) = val ? 1 : 0;
-
 		return SUCCESS;
 	}
 
 	if (ZSTR_LEN(new_value) == (sizeof("md5") - 1) &&
 		strncasecmp(ZSTR_VAL(new_value), "md5", sizeof("md5") - 1) == 0) {
-		PS(hash_func) = PS_HASH_FUNC_MD5;
-
 		return SUCCESS;
 	}
 
-	if (ZSTR_LEN(new_value) == (sizeof("sha1") - 1) &&
-		strncasecmp(ZSTR_VAL(new_value), "sha1", sizeof("sha1") - 1) == 0) {
-		PS(hash_func) = PS_HASH_FUNC_SHA1;
-
-		return SUCCESS;
-	}
-
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH) /* {{{ */
-{
-	php_hash_ops *ops = (php_hash_ops*)php_hash_fetch_ops(ZSTR_VAL(new_value), ZSTR_LEN(new_value));
-
-	if (ops) {
-		PS(hash_func) = PS_HASH_FUNC_OTHER;
-		PS(hash_ops) = ops;
-
-		return SUCCESS;
-	}
-}
-#endif /* HAVE_HASH_EXT }}} */
-
-	php_error_docref(NULL, E_WARNING, "session.configuration 'session.hash_function' must be existing hash function. %s does not exist.", ZSTR_VAL(new_value));
+	// Emit E_DEPRECATED if the value is changed away from the default.
+	php_error_docref(NULL, E_DEPRECATED, "session.hash_function is deprecated. Please use session.sid_length to control session id length");
 	return FAILURE;
 }
 /* }}} */
