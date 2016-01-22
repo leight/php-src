@@ -40,8 +40,6 @@
 #include "rfc1867.h"
 #include "php_variables.h"
 #include "php_session.h"
-#include "ext/standard/md5.h"
-#include "ext/standard/sha1.h"
 #include "ext/standard/php_var.h"
 #include "ext/date/php_date.h"
 #include "ext/standard/php_lcg.h"
@@ -259,12 +257,6 @@ static int php_session_decode(zend_string *data) /* {{{ */
 
 static char hexconvtab[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,-";
 
-enum {
-	PS_HASH_FUNC_MD5,
-	PS_HASH_FUNC_SHA1,
-	PS_HASH_FUNC_OTHER
-};
-
 /* returns a pointer to the byte after the last valid character in out */
 static char *bin_to_readable(char *in, size_t inlen, char *out, char nbits, size_t limit) /* {{{ */
 {
@@ -310,9 +302,9 @@ PHPAPI zend_string *php_session_create_id(PS_CREATE_SID_ARGS) /* {{{ */
 	unsigned int random_len;
 	char *random_buf;
 
-	if (PS(hash_bits_per_character) < 4 || PS(hash_bits_per_character) > 6) {
-		PS(hash_bits_per_character) = 4;
-		php_error_docref(NULL, E_WARNING, "The ini setting session.hash_bits_per_character is out of range (should be 4, 5, or 6) - using 4 for now");
+	if (PS(sid_bits_per_character) < 4 || PS(sid_bits_per_character) > 6) {
+		PS(sid_bits_per_character) = 4;
+		php_error_docref(NULL, E_WARNING, "The ini setting session.sid_bits_per_character is out of range (should be 4, 5, or 6) - using 4 for now");
 	}
 
 	if (PS(sid_length) < 32 || PS(sid_length) > 128) {
@@ -320,12 +312,12 @@ PHPAPI zend_string *php_session_create_id(PS_CREATE_SID_ARGS) /* {{{ */
 		php_error_docref(NULL, E_WARNING, "The ini setting session.sid_length is out of range (should be between 32 and 128) - using 32 for now");
 	}
 	
-	random_len = (PS(sid_length) * PS(hash_bits_per_character) / 8.0f) + 1;
+	random_len = (PS(sid_length) * PS(sid_bits_per_character) / 8.0f) + 1;
 	random_buf = emalloc(random_len);
 	php_random_bytes_throw(random_buf, random_len);
 
 	outid = zend_string_alloc(PS(sid_length) + 1, 0);
-	bin_to_readable(random_buf, random_len, ZSTR_VAL(outid), (char)PS(hash_bits_per_character), PS(sid_length));
+	bin_to_readable(random_buf, random_len, ZSTR_VAL(outid), (char)PS(sid_bits_per_character), PS(sid_length));
 	efree(random_buf);
 
 	return outid;
@@ -650,7 +642,7 @@ static PHP_INI_MH(OnUpdateHashFunc) /* {{{ */
 	char *endptr = NULL;
 
 	val = ZEND_STRTOL(ZSTR_VAL(new_value), &endptr, 10);
-	if (endptr && (*endptr == '\0') && !val) {
+	if (endptr && (*endptr == '\0') && val == 0) { // val = 0 is the default
 		/* Numeric value */
 		return SUCCESS;
 	}
@@ -662,6 +654,23 @@ static PHP_INI_MH(OnUpdateHashFunc) /* {{{ */
 
 	// Emit E_DEPRECATED if the value is changed away from the default.
 	php_error_docref(NULL, E_DEPRECATED, "session.hash_function is deprecated. Please use session.sid_length to control session id length");
+	return FAILURE;
+}
+/* }}} */
+
+static PHP_INI_MH(OnUpdateHashBits) /* {{{ */
+{
+	zend_long val;
+	char *endptr = NULL;
+
+	val = ZEND_STRTOL(ZSTR_VAL(new_value), &endptr, 10);
+	if (endptr && (*endptr == '\0') && val == 4) { // val = 4 is the default
+		/* Numeric value */
+		return SUCCESS;
+	}
+
+	// Emit E_DEPRECATED if the value is changed away from the default.
+	php_error_docref(NULL, E_DEPRECATED, "session.hash_bits_per_character is deprecated. Please use session.sid_bits_per_character instead");
 	return FAILURE;
 }
 /* }}} */
@@ -710,7 +719,8 @@ PHP_INI_BEGIN()
 	STD_PHP_INI_ENTRY("session.cache_expire",       "180",       PHP_INI_ALL, OnUpdateLong,   cache_expire,       php_ps_globals,    ps_globals)
 	PHP_INI_ENTRY("session.use_trans_sid",          "0",         PHP_INI_ALL, OnUpdateTransSid)
 	PHP_INI_ENTRY("session.hash_function",          "0",         PHP_INI_ALL, OnUpdateHashFunc)
-	STD_PHP_INI_ENTRY("session.hash_bits_per_character", "4",    PHP_INI_ALL, OnUpdateLong,   hash_bits_per_character, php_ps_globals, ps_globals)
+	PHP_INI_ENTRY("session.hash_bits_per_character", "4",        PHP_INI_ALL, OnUpdateHashBits)
+	STD_PHP_INI_ENTRY("session.sid_bits_per_character", "4",     PHP_INI_ALL, OnUpdateLong,   sid_bits_per_character, php_ps_globals, ps_globals)
 	STD_PHP_INI_ENTRY("session.sid_length",         "32",        PHP_INI_ALL, OnUpdateLong,   sid_length, php_ps_globals, ps_globals)
 	STD_PHP_INI_BOOLEAN("session.lazy_write",       "1",         PHP_INI_ALL, OnUpdateBool,   lazy_write,         php_ps_globals,    ps_globals)
 

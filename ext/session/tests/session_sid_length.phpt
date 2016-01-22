@@ -13,7 +13,7 @@ ob_start();
 echo "*** Testing session.sid_length ***\n";
 
 foreach ($testBits as $bits) {
-    ini_set('session.hash_bits_per_character', $bits);
+    ini_set('session.sid_bits_per_character', $bits);
 
     foreach ($testLengths as $length) {
         print "length=$length, bits=$bits\n";

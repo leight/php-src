@@ -4,7 +4,7 @@ if [[ "$2" = "" ]] || [[ "$3" = "" ]]; then
        echo "Usage: $0 BASE_DIRECTORY DEPTH HASH_BITS"
        echo "BASE_DIRECTORY will be created if it doesn't exist"
        echo "DEPTH must be an integer number >0"
-       echo "HASH_BITS(session.hash_bits_per_charactor) should be one of 4, 5, or 6"
+       echo "CHAR_BITS(session.sid_bits_per_charactor) should be one of 4, 5, or 6"
        exit 1
 fi
 
@@ -56,7 +56,7 @@ if [[ ! -d $directory ]]; then
 fi
 
 
-echo "Creating session path in $directory with a depth of $depth for session.hash_bits_per_character = $hashbits"
+echo "Creating session path in $directory with a depth of $depth for session.sid_bits_per_character = $hashbits"
 
 for i in $hash_chars; do
        newpath="$directory/$i"

@@ -4,7 +4,7 @@ Test session_id() function : error functionality
 <?php include('skipif.inc'); ?>
 --INI--
 session.sid_length=32
-session.hash_bits_per_character=4
+session.sid_bits_per_character=4
 --FILE--
 <?php
 

@@ -23,10 +23,6 @@
 
 #include "ext/standard/php_var.h"
 
-#if defined(HAVE_HASH_EXT) && !defined(COMPILE_DL_HASH)
-# include "ext/hash/php_hash.h"
-#endif
-
 #define PHP_SESSION_API 20150121
 
 #include "php_version.h"
@@ -189,7 +185,7 @@ typedef struct _php_ps_globals {
 	zend_bool use_only_cookies;
 	zend_bool use_trans_sid; /* contains the INI value of whether to use trans-sid */
 
-	zend_long hash_bits_per_character;
+	zend_long sid_bits_per_character;
 	zend_long sid_length;
 	int send_cookie;
 	int define_sid;
