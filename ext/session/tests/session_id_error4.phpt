@@ -3,7 +3,7 @@ Test session_id() function : error functionality
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
-session.hash_function=0
+session.sid_length=32
 session.hash_bits_per_character=4
 --FILE--
 <?php
@@ -17,8 +17,6 @@ ob_start();
  */
 
 echo "*** Testing session_id() : error functionality ***\n";
-
-var_dump(ini_set("session.hash_function", -1));
 var_dump(session_id());
 var_dump(session_start());
 var_dump(session_id());
@@ -29,9 +27,8 @@ ob_end_flush();
 ?>
 --EXPECTF--
 *** Testing session_id() : error functionality ***
-string(1) "0"
 string(0) ""
 bool(true)
-string(40) "%s"
+string(32) "%s"
 bool(true)
 Done

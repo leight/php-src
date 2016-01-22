@@ -3,9 +3,8 @@ Bug #68063 (Empty session IDs do still start sessions)
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
+session.sid_length=32
 session.use_strict_mode=0
-session.hash_function=1
-session.hash_bits_per_character=4
 --FILE--
 <?php
 // Empty session ID may happen by browser bugs
@@ -21,4 +20,4 @@ var_dump(session_id());
 ?>
 --EXPECTF--
 bool(true)
-string(40) "%s"
+string(32) "%s"

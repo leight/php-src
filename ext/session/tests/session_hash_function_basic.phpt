@@ -3,6 +3,7 @@ Test session.hash_function ini setting : basic functionality
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
+session.sid_length=32
 session.hash_bits_per_character=4
 --FILE--
 <?php
@@ -37,16 +38,18 @@ bool(true)
 bool(true)
 string(32) "%s"
 bool(true)
-string(3) "md5"
-bool(true)
-bool(true)
-string(40) "%s"
-bool(true)
 
-Warning: ini_set(): session.configuration 'session.hash_function' must be existing hash function. none does not exist. in %s%esession_hash_function_basic.php on line 17
+Deprecated: ini_set(): session.hash_function is deprecated. Please use session.sid_length to control session id length in %ssession_hash_function_basic.php on line 12
 bool(false)
 bool(true)
 bool(true)
-string(40) "%s"
+string(32) "%s"
+bool(true)
+
+Deprecated: ini_set(): session.hash_function is deprecated. Please use session.sid_length to control session id length in %ssession_hash_function_basic.php on line 17
+bool(false)
+bool(true)
+bool(true)
+string(32) "%s"
 bool(true)
 Done
