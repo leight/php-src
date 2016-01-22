@@ -316,7 +316,7 @@ PHPAPI zend_string *php_session_create_id(PS_CREATE_SID_ARGS) /* {{{ */
 	}
 
 	if (PS(sid_length) < 32 || PS(sid_length) > 128) {
-		PS(hash_bits_per_character) = 4;
+		PS(sid_length) = 32;
 		php_error_docref(NULL, E_WARNING, "The ini setting session.sid_length is out of range (should be between 32 and 128) - using 32 for now");
 	}
 	
