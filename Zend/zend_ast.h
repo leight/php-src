@@ -142,6 +142,8 @@ enum _zend_ast_kind {
 	ZEND_AST_PARAM,
 	ZEND_AST_PROP_ELEM,
 	ZEND_AST_CONST_ELEM,
+	
+	ZEND_AST_SLICE,
 
 	/* 4 child nodes */
 	ZEND_AST_FOR = 4 << ZEND_AST_NUM_CHILDREN_SHIFT,

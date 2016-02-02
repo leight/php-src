@@ -246,7 +246,15 @@ END_EXTERN_C()
 #define ZEND_FETCH_CLASS_CONSTANT            181
 #define ZEND_BIND_LEXICAL                    182
 #define ZEND_BIND_STATIC                     183
+#define ZEND_FETCH_SLICE_R                   184
+#define ZEND_FETCH_SLICE_W                   185
+#define ZEND_FETCH_SLICE_RW                  186
+#define ZEND_FETCH_SLICE_IS                  187
+#define ZEND_FETCH_SLICE_FUNC_ARG            188
+#define ZEND_FETCH_SLICE_UNSET               189
+#define ZEND_ASSIGN_SLICE                    190
+#define ZEND_UNSET_SLICE                     191
 
-#define ZEND_VM_LAST_OPCODE                  183
+#define ZEND_VM_LAST_OPCODE                  191
 
 #endif

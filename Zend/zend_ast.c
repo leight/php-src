@@ -404,6 +404,7 @@ ZEND_API int zend_ast_evaluate(zval *result, zend_ast *ast, zend_class_entry *sc
 				zval_dtor(&op2);
 			}
 			break;
+		case ZEND_AST_SLICE: // TODO
 		default:
 			zend_throw_error(NULL, "Unsupported constant expression");
 			ret = FAILURE;
@@ -1566,6 +1567,19 @@ simple_list:
 			zend_ast_export_name(str, ast->child[1], 0, indent);
 			APPEND_DEFAULT_VALUE(2);
 
+		case ZEND_AST_SLICE:
+			zend_ast_export_ex(str, ast->child[0], 260, indent);
+			smart_str_appendc(str, '[');
+			if (ast->child[1]) {
+				zend_ast_export_ex(str, ast->child[1], 0, indent);
+			}
+			smart_str_appendc(str, ':');
+			if (ast->child[2]) {
+				zend_ast_export_ex(str, ast->child[2], 0, indent);
+			}
+			smart_str_appendc(str, ']');
+			break;
+		
 		/* 4 child nodes */
 		case ZEND_AST_FOR:
 			smart_str_appends(str, "for (");
