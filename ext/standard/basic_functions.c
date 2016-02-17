@@ -36,6 +36,10 @@
 #include "ext/standard/php_dns.h"
 #include "ext/standard/php_uuencode.h"
 
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+#include "ext/standard/php_afl.h"
+#endif
+
 #ifdef PHP_WIN32
 #include "win32/php_win32_globals.h"
 #include "win32/time.h"
@@ -213,6 +217,12 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO(arginfo_stream_wrapper_restore, 0)
 	ZEND_ARG_INFO(0, protocol)
 ZEND_END_ARG_INFO()
+/* }}} */
+/* {{ afl.c */
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+ZEND_BEGIN_ARG_INFO(arginfo_afl_init, 0)
+ZEND_END_ARG_INFO()
+#endif
 /* }}} */
 /* {{{ array.c */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_krsort, 0, 0, 1)
@@ -3264,6 +3274,11 @@ const zend_function_entry basic_functions[] = { /* {{{ */
 	PHP_FE(ob_get_contents,													arginfo_ob_get_contents)
 	PHP_FE(ob_implicit_flush,												arginfo_ob_implicit_flush)
 	PHP_FE(ob_list_handlers,												arginfo_ob_list_handlers)
+
+	/* functions from afl.c */
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+	PHP_FE(afl_init,														arginfo_afl_init)
+#endif
 
 	/* functions from array.c */
 	PHP_FE(ksort,															arginfo_ksort)
