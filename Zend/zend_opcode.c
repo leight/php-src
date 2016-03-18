@@ -75,6 +75,7 @@ void init_op_array(zend_op_array *op_array, zend_uchar type, int initial_ops_siz
 	op_array->num_args = 0;
 	op_array->required_num_args = 0;
 
+	op_array->line_ns = NULL;
 	op_array->scope = NULL;
 	op_array->prototype = NULL;
 
@@ -440,6 +441,22 @@ ZEND_API void destroy_op_array(zend_op_array *op_array)
 			}
 		}
 		efree(arg_info);
+	}
+
+	if (op_array->line_ns) {
+		zend_line_namespace *current = op_array->line_ns;
+		zend_line_namespace *next;
+
+		do {
+			next = current->next;
+
+			if (current->namespace) {
+				zend_string_release(current->namespace);
+			}
+			efree(current);
+
+			current = next;
+		} while (current);
 	}
 }
 

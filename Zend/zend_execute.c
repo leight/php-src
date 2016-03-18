@@ -2625,6 +2625,25 @@ static void zend_swap_operands(zend_op *op) /* {{{ */
 }
 /* }}} */
 
+ZEND_API zend_string *get_line_namespace(zend_op_array *op_array, uint32_t line) /* {{{ */
+{
+	zend_line_namespace *current = op_array->line_ns;
+
+	if (!current) {
+		return NULL;
+	}
+
+	while (line < current->line) {
+		if (!current->next) {
+			return NULL;
+		}
+		current = current->next;
+	}
+
+	return current->namespace;
+}
+/* }}} */
+
 #ifdef HAVE_GCC_GLOBAL_REGS
 # if defined(__GNUC__) && ZEND_GCC_VERSION >= 4008 && defined(i386)
 #  define ZEND_VM_FP_GLOBAL_REG "%esi"

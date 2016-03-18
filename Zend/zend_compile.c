@@ -6028,6 +6028,7 @@ void zend_compile_namespace(zend_ast *ast) /* {{{ */
 	zend_ast *stmt_ast = ast->child[1];
 	zend_string *name;
 	zend_bool with_bracket = stmt_ast != NULL;
+	zend_line_namespace *line_ns;
 
 	/* handle mixed syntax declaration or nested namespaces */
 	if (!FC(has_bracketed_namespaces)) {
@@ -6086,6 +6087,25 @@ void zend_compile_namespace(zend_ast *ast) /* {{{ */
 	if (with_bracket) {
 		FC(has_bracketed_namespaces) = 1;
 	}
+
+	line_ns = emalloc(sizeof(zend_line_namespace));
+
+	line_ns->line = ast->lineno;
+	if (FC(current_namespace)) {
+		line_ns->namespace = zend_string_copy(FC(current_namespace));
+	}
+	else {
+		line_ns->namespace = NULL;
+	}
+
+	if (!CG(active_op_array)->line_ns) {
+		line_ns->next = NULL;
+	}
+	else {
+		line_ns->next = CG(active_op_array)->line_ns;
+	}
+
+	CG(active_op_array)->line_ns = line_ns;
 
 	if (stmt_ast) {
 		zend_compile_top_stmt(stmt_ast);

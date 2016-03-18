@@ -3777,6 +3777,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_NEW_SPEC_CONST_HANDLER(ZEND_OP
 		ce = Z_CE_P(EX_VAR(opline->op1.var));
 	}
 
+	zend_string *ns = get_line_namespace(&EX(func)->op_array, opline->lineno);
+	if (ns) {
+		printf("Top level code creating class from namespace: %s\n", ZSTR_VAL(ns));
+	}
+	else {
+		printf("Top level code creating class from root namespace");
+	}
+
 	result = EX_VAR(opline->result.var);
 	if (UNEXPECTED(object_init_ex(result, ce) != SUCCESS)) {
 		HANDLE_EXCEPTION();

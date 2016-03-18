@@ -350,6 +350,14 @@ typedef struct _zend_internal_function_info {
 	zend_bool _is_variadic;
 } zend_internal_function_info;
 
+typedef struct _zend_line_namespace zend_line_namespace;
+
+typedef struct _zend_line_namespace {
+	uint32_t line;
+	zend_string *namespace;
+	zend_line_namespace *next;
+} zend_line_namespace;
+
 struct _zend_op_array {
 	/* Common elements */
 	zend_uchar type;
@@ -361,6 +369,7 @@ struct _zend_op_array {
 	uint32_t num_args;
 	uint32_t required_num_args;
 	zend_arg_info *arg_info;
+	zend_line_namespace *line_ns;
 	/* END of common elements */
 
 	uint32_t *refcount;
