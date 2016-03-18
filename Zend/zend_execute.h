@@ -319,8 +319,6 @@ ZEND_API void zend_clean_and_cache_symbol_table(zend_array *symbol_table);
 void zend_free_compiled_variables(zend_execute_data *execute_data);
 void zend_cleanup_unfinished_execution(zend_execute_data *execute_data, uint32_t op_num, uint32_t catch_op_num);
 
-zend_string *get_line_namespace(zend_op_array *op_array, uint32_t line);
-
 #define CACHE_ADDR(num) \
 	((void**)((char*)EX_RUN_TIME_CACHE() + (num)))
 

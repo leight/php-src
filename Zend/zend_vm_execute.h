@@ -565,6 +565,26 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_leave_helper_SPEC(ZEND_OPCODE_
 	}
 }
 
+static zend_string *get_opline_namespace(zend_execute_data *execute_data) /* {{{ */
+{
+	zend_line_namespace *current = EX(func)->op_array.line_ns;
+	uint32_t line = opline - EX(func)->op_array.opcodes;
+
+	if (!current) {
+		return NULL;
+	}
+
+	while (current->line > line) {
+		if (!current->next) {
+			return NULL;
+		}
+		current = current->next;
+	}
+
+	return current->namespace;
+}
+/* }}} */
+
 static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_JMP_SPEC_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
 	USE_OPLINE
@@ -3777,12 +3797,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_NEW_SPEC_CONST_HANDLER(ZEND_OP
 		ce = Z_CE_P(EX_VAR(opline->op1.var));
 	}
 
-	zend_string *ns = get_line_namespace(&EX(func)->op_array, opline->lineno);
+	zend_string *ns = get_opline_namespace(execute_data);
 	if (ns) {
-		printf("Top level code creating class from namespace: %s\n", ZSTR_VAL(ns));
+		printf("Top level code creating object from namespace: %s\n", ZSTR_VAL(ns));
 	}
 	else {
-		printf("Top level code creating class from root namespace");
+		printf("Top level code creating object from root namespace\n");
 	}
 
 	result = EX_VAR(opline->result.var);

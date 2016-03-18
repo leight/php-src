@@ -6090,7 +6090,7 @@ void zend_compile_namespace(zend_ast *ast) /* {{{ */
 
 	line_ns = emalloc(sizeof(zend_line_namespace));
 
-	line_ns->line = ast->lineno;
+	line_ns->line = get_next_op_number(CG(active_op_array));
 	if (FC(current_namespace)) {
 		line_ns->namespace = zend_string_copy(FC(current_namespace));
 	}
