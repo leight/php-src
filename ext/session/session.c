@@ -46,7 +46,6 @@
 #include "ext/date/php_date.h"
 #include "ext/standard/php_lcg.h"
 #include "ext/standard/url_scanner_ex.h"
-#include "ext/standard/php_rand.h" /* for RAND_MAX */
 #include "ext/standard/info.h"
 #include "zend_smart_str.h"
 #include "ext/standard/url.h"

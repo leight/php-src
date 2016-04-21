@@ -33,57 +33,6 @@
 
 #include "basic_functions.h"
 
-
-/* SYSTEM RAND FUNCTIONS */
-
-/* {{{ php_srand
- */
-PHPAPI void php_srand(zend_long seed)
-{
-#ifdef ZTS
-	BG(rand_seed) = (unsigned int) seed;
-#else
-# if defined(HAVE_SRANDOM)
-	srandom((unsigned int) seed);
-# elif defined(HAVE_SRAND48)
-	srand48(seed);
-# else
-	srand((unsigned int) seed);
-# endif
-#endif
-
-	/* Seed only once */
-	BG(rand_is_seeded) = 1;
-}
-/* }}} */
-
-/* {{{ php_rand
- */
-PHPAPI zend_long php_rand(void)
-{
-	zend_long ret;
-
-	if (!BG(rand_is_seeded)) {
-		php_srand(GENERATE_SEED());
-	}
-
-#ifdef ZTS
-	ret = php_rand_r(&BG(rand_seed));
-#else
-# if defined(HAVE_RANDOM)
-	ret = random();
-# elif defined(HAVE_LRAND48)
-	ret = lrand48();
-# else
-	ret = rand();
-# endif
-#endif
-
-	return ret;
-}
-/* }}} */
-
-
 /* MT RAND FUNCTIONS */
 
 /*
@@ -210,6 +159,10 @@ PHPAPI uint32_t php_mt_rand(void)
 	/* Pull a 32-bit integer from the generator state
 	   Every other access function simply transforms the numbers extracted here */
 
+	if (UNEXPECTED(!BG(mt_rand_is_seeded))) {
+		php_mt_srand(GENERATE_SEED());
+	}
+
 	register uint32_t s1;
 
 	if (BG(left) == 0) {
@@ -222,22 +175,6 @@ PHPAPI uint32_t php_mt_rand(void)
 	s1 ^= (s1 <<  7) & 0x9d2c5680U;
 	s1 ^= (s1 << 15) & 0xefc60000U;
 	return ( s1 ^ (s1 >> 18) );
-}
-/* }}} */
-
-/* {{{ proto void srand([int seed])
-   Seeds random number generator */
-PHP_FUNCTION(srand)
-{
-	zend_long seed = 0;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|l", &seed) == FAILURE)
-		return;
-
-	if (ZEND_NUM_ARGS() == 0)
-		seed = GENERATE_SEED();
-
-	php_srand(seed);
 }
 /* }}} */
 
@@ -257,84 +194,14 @@ PHP_FUNCTION(mt_srand)
 }
 /* }}} */
 
-
-/*
- * A bit of tricky math here.  We want to avoid using a modulus because
- * that simply tosses the high-order bits and might skew the distribution
- * of random values over the range.  Instead we map the range directly.
- *
- * We need to map the range from 0...M evenly to the range a...b
- * Let n = the random number and n' = the mapped random number
- *
- * Then we have: n' = a + n(b-a)/M
- *
- * We have a problem here in that only n==M will get mapped to b which
- # means the chances of getting b is much much less than getting any of
- # the other values in the range.  We can fix this by increasing our range
- # artificially and using:
- #
- #               n' = a + n(b-a+1)/M
- *
- # Now we only have a problem if n==M which would cause us to produce a
- # number of b+1 which would be bad.  So we bump M up by one to make sure
- # this will never happen, and the final algorithm looks like this:
- #
- #               n' = a + n(b-a+1)/(M+1)
- *
- * -RL
+/* {{{ php_mt_rand_range
  */
-
-/* {{{ proto int rand([int min, int max])
-   Returns a random number */
-PHP_FUNCTION(rand)
+PHPAPI zend_long php_mt_rand_range(zend_long min, zend_long max)
 {
-	zend_long min;
-	zend_long max;
-	zend_long number;
-	int  argc = ZEND_NUM_ARGS();
-
-	if (argc != 0 && zend_parse_parameters(argc, "ll", &min, &max) == FAILURE)
-		return;
-
-	number = php_rand();
-	if (argc == 2) {
-		RAND_RANGE(number, min, max, PHP_RAND_MAX);
-	}
-
-	RETURN_LONG(number);
-}
-/* }}} */
-
-/* {{{ proto int mt_rand([int min, int max])
-   Returns a random number from Mersenne Twister */
-PHP_FUNCTION(mt_rand)
-{
-	zend_long min;
-	zend_long max;
-	int argc = ZEND_NUM_ARGS();
-	zend_ulong umax;
+	zend_ulong umax = max - min;
 	zend_ulong limit;
 	zend_ulong result;
 
-	if (!BG(mt_rand_is_seeded)) {
-		php_mt_srand(GENERATE_SEED());
-	}
-
-	if (argc == 0) {
-		// genrand_int31 in mt19937ar.c performs a right shift
-		RETURN_LONG(php_mt_rand() >> 1);
-	}
-
-	if (zend_parse_parameters(argc, "ll", &min, &max) == FAILURE) {
-		return;
-	}
-	
-	if (UNEXPECTED(max < min)) {
-		php_error_docref(NULL, E_WARNING, "max(" ZEND_LONG_FMT ") is smaller than min(" ZEND_LONG_FMT ")", max, min);
-		RETURN_FALSE;
-	}
-
-	umax = max - min;
 #if ZEND_ULONG_MAX > UINT32_MAX
 	result = ((zend_ulong)php_mt_rand() << 32) | php_mt_rand();
 #else
@@ -343,7 +210,7 @@ PHP_FUNCTION(mt_rand)
 
 	/* Special case where no modulus is required */
 	if (UNEXPECTED(umax == ZEND_ULONG_MAX)) {
-		RETURN_LONG((zend_long)result);
+		return (zend_long)result;
 	}
 
 	/* Increment the max so the range is inclusive of max */
@@ -364,19 +231,33 @@ PHP_FUNCTION(mt_rand)
 		}
 	}
 
-	RETURN_LONG((zend_long)((result % umax) + min));
+	return (zend_long)((result % umax) + min);
 }
 /* }}} */
 
-/* {{{ proto int getrandmax(void)
-   Returns the maximum value a random number can have */
-PHP_FUNCTION(getrandmax)
+/* {{{ proto int mt_rand([int min, int max])
+   Returns a random number from Mersenne Twister */
+PHP_FUNCTION(mt_rand)
 {
-	if (zend_parse_parameters_none() == FAILURE) {
+	zend_long min;
+	zend_long max;
+	int argc = ZEND_NUM_ARGS();
+
+	if (argc == 0) {
+		// genrand_int31 in mt19937ar.c performs a right shift
+		RETURN_LONG(php_mt_rand() >> 1);
+	}
+
+	if (zend_parse_parameters(argc, "ll", &min, &max) == FAILURE) {
 		return;
 	}
 
-	RETURN_LONG(PHP_RAND_MAX);
+	if (UNEXPECTED(max < min)) {
+		php_error_docref(NULL, E_WARNING, "max(" ZEND_LONG_FMT ") is smaller than min(" ZEND_LONG_FMT ")", max, min);
+		RETURN_FALSE;
+	}
+
+	RETURN_LONG(php_mt_rand_range(min, max));
 }
 /* }}} */
 
@@ -392,7 +273,7 @@ PHP_FUNCTION(mt_getrandmax)
 	 * Melo: it could be 2^^32 but we only use 2^^31 to maintain
 	 * compatibility with the previous php_rand
 	 */
-  	RETURN_LONG(PHP_MT_RAND_MAX); /* 2^^31 */
+	RETURN_LONG(PHP_MT_RAND_MAX >> 1);
 }
 /* }}} */
 

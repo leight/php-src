@@ -1397,7 +1397,7 @@ PHP_FUNCTION(mcrypt_create_iv)
 	} else {
 		n = (int)size;
 		while (size) {
-			iv[--size] = (char) (255.0 * php_rand() / RAND_MAX);
+			iv[--size] = (char)php_mt_rand();
 		}
 	}
 	RETVAL_STRINGL(iv, n);

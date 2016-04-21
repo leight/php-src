@@ -24,7 +24,6 @@
 
 #include "fcntl.h"
 #include "php_password.h"
-#include "php_rand.h"
 #include "php_crypt.h"
 #include "base64.h"
 #include "zend_interfaces.h"

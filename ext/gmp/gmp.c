@@ -34,7 +34,6 @@
 
 /* Needed for gmp_random() */
 #include "ext/standard/php_rand.h"
-#include "ext/standard/php_lcg.h"
 #define GMP_ABS(x) ((x) >= 0 ? (x) : -(x))
 
 /* {{{ arginfo */

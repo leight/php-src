@@ -61,7 +61,7 @@
 /* sha512 crypt has the maximal salt length of 123 characters */
 #define PHP_MAX_SALT_LEN 123
 
-#define PHP_CRYPT_RAND php_rand()
+#define PHP_CRYPT_RAND php_mt_rand()
 
 /* Used to check DES salts to ensure that they contain only valid characters */
 #define IS_VALID_SALT_CHARACTER(c) (((c) >= '.' && (c) <= '9') || ((c) >= 'A' && (c) <= 'Z') || ((c) >= 'a' && (c) <= 'z'))

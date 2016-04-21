@@ -29,23 +29,8 @@
 #include "basic_functions.h"
 #include "php_lcg.h"
 
-/* System Rand functions */
-#ifndef RAND_MAX
-#define RAND_MAX (1<<15)
-#endif
-
-/* In ZTS mode we rely on rand_r() so we must use RAND_MAX. */
-#if !defined(ZTS) && (defined(HAVE_LRAND48) || defined(HAVE_RANDOM))
-#define PHP_RAND_MAX 2147483647
-#else
-#define PHP_RAND_MAX RAND_MAX
-#endif
-
-#define RAND_RANGE(__n, __min, __max, __tmax) \
-    (__n) = (__min) + (zend_long) ((double) ( (double) (__max) - (__min) + 1.0) * ((__n) / ((__tmax) + 1.0)))
-
 /* MT Rand */
-#define PHP_MT_RAND_MAX ((zend_long) (0x7FFFFFFF)) /* (1<<31) - 1 */
+#define PHP_MT_RAND_MAX ((zend_long) (0xFFFFFFFF)) /* (1<<32) - 1 */
 
 #ifdef PHP_WIN32
 #define GENERATE_SEED() (((zend_long) (time(0) * GetCurrentProcessId())) ^ ((zend_long) (1000000.0 * php_combined_lcg())))
@@ -53,9 +38,8 @@
 #define GENERATE_SEED() (((zend_long) (time(0) * getpid())) ^ ((zend_long) (1000000.0 * php_combined_lcg())))
 #endif
 
-PHPAPI void php_srand(zend_long seed);
-PHPAPI zend_long php_rand(void);
 PHPAPI void php_mt_srand(uint32_t seed);
 PHPAPI uint32_t php_mt_rand(void);
+PHPAPI zend_long php_mt_rand_range(zend_long min, zend_long max);
 
 #endif	/* PHP_RAND_H */

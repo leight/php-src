@@ -2345,8 +2345,7 @@ static void php_array_data_shuffle(zval *array) /* {{{ */
 			}
 		}
 		while (--n_left) {
-			rnd_idx = php_rand();
-			RAND_RANGE(rnd_idx, 0, n_left, PHP_RAND_MAX);
+			rnd_idx = php_mt_rand_range(0, n_left);
 			if (rnd_idx != n_left) {
 				temp = hash->arData[n_left];
 				hash->arData[n_left] = hash->arData[rnd_idx];
@@ -2371,8 +2370,7 @@ static void php_array_data_shuffle(zval *array) /* {{{ */
 			}
 		}
 		while (--n_left) {
-			rnd_idx = php_rand();
-			RAND_RANGE(rnd_idx, 0, n_left, PHP_RAND_MAX);
+			rnd_idx = php_mt_rand_range(0, n_left);
 			if (rnd_idx != n_left) {
 				temp = hash->arData[n_left];
 				hash->arData[n_left] = hash->arData[rnd_idx];
@@ -5044,9 +5042,9 @@ PHP_FUNCTION(array_rand)
 			break;
 		}
 
-		randval = php_rand();
+		randval = php_mt_rand();
 
-		if ((double) (randval / (PHP_RAND_MAX + 1.0)) < (double) num_req / (double) num_avail) {
+		if ((double) (randval / PHP_MT_RAND_MAX) <= (double) num_req / (double) num_avail) {
 			/* If we are returning a single result, just do it. */
 			if (Z_TYPE_P(return_value) != IS_ARRAY) {
 				if (string_key) {
