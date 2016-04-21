@@ -311,36 +311,60 @@ PHP_FUNCTION(mt_rand)
 {
 	zend_long min;
 	zend_long max;
-	zend_long number;
-	int  argc = ZEND_NUM_ARGS();
-
-	if (argc != 0) {
-		if (zend_parse_parameters(argc, "ll", &min, &max) == FAILURE) {
-			return;
-		} else if (max < min) {
-			php_error_docref(NULL, E_WARNING, "max(" ZEND_LONG_FMT ") is smaller than min(" ZEND_LONG_FMT ")", max, min);
-			RETURN_FALSE;
-		}
-	}
+	int argc = ZEND_NUM_ARGS();
+	zend_ulong umax;
+	zend_ulong limit;
+	zend_ulong result;
 
 	if (!BG(mt_rand_is_seeded)) {
 		php_mt_srand(GENERATE_SEED());
 	}
 
-	/*
-	 * Melo: hmms.. randomMT() returns 32 random bits...
-	 * Yet, the previous php_rand only returns 31 at most.
-	 * So I put a right shift to loose the lsb. It *seems*
-	 * better than clearing the msb.
-	 * Update:
-	 * I talked with Cokus via email and it won't ruin the algorithm
-	 */
-	number = (zend_long) (php_mt_rand() >> 1);
-	if (argc == 2) {
-		RAND_RANGE(number, min, max, PHP_MT_RAND_MAX);
+	if (argc == 0) {
+		// genrand_int31 in mt19937ar.c performs a right shift
+		RETURN_LONG(php_mt_rand() >> 1);
 	}
 
-	RETURN_LONG(number);
+	if (zend_parse_parameters(argc, "ll", &min, &max) == FAILURE) {
+		return;
+	}
+	
+	if (UNEXPECTED(max < min)) {
+		php_error_docref(NULL, E_WARNING, "max(" ZEND_LONG_FMT ") is smaller than min(" ZEND_LONG_FMT ")", max, min);
+		RETURN_FALSE;
+	}
+
+	umax = max - min;
+#if ZEND_ULONG_MAX > UINT32_MAX
+	result = ((zend_ulong)php_mt_rand() << 32) | php_mt_rand();
+#else
+	result = php_mt_rand();
+#endif
+
+	/* Special case where no modulus is required */
+	if (UNEXPECTED(umax == ZEND_ULONG_MAX)) {
+		RETURN_LONG((zend_long)result);
+	}
+
+	/* Increment the max so the range is inclusive of max */
+	umax++;
+
+	/* Powers of two are not biased */
+	if (EXPECTED((umax & (umax - 1)) != 0)) {
+		/* Ceiling under which ZEND_LONG_MAX % max == 0 */
+		limit = ZEND_ULONG_MAX - (ZEND_ULONG_MAX % umax) - 1;
+
+		/* Discard numbers over the limit to avoid modulo bias */
+		while (UNEXPECTED(result > limit)) {
+#if ZEND_ULONG_MAX > UINT32_MAX
+			result = (result << 32) | php_mt_rand();
+#else
+			result = php_mt_rand();
+#endif
+		}
+	}
+
+	RETURN_LONG((zend_long)((result % umax) + min));
 }
 /* }}} */
 
